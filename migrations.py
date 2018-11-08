@@ -2,9 +2,6 @@ from models import db, Contact, User
 from faker import Factory
 
 fake = Factory.create()
-# Spanish
-#fake = Factory.create('es_ES')
-# Reload tables
 db.drop_all()
 db.create_all()
 # Make 100 fake contacts
@@ -15,8 +12,8 @@ for num in range(100):
     email = fake.email()
     phone = fake.phone_number()
     # Save in database
-    mi_contacto = Contact(name=name, surname=surname, email=email, phone=phone)
-    db.session.add(mi_contacto)
+    my_contact = Contact(name=name, surname=surname, email=email, phone=phone)
+    db.session.add(my_contact)
 
 db.session.commit()
 

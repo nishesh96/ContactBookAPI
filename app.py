@@ -1,6 +1,5 @@
-from flask import Flask, redirect, url_for, render_template, request, flash, make_response, json, jsonify, g, session
+from flask import Flask, request, flash, make_response, json, jsonify, g, session
 from models import db, Contact, User
-from forms import ContactForm
 from flask_httpauth import HTTPBasicAuth
 
 
