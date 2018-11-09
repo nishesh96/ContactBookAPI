@@ -1,6 +1,9 @@
 from flask import Flask, request, flash, make_response, json, jsonify, g, session
 from models import db, Contact, User
 from flask_httpauth import HTTPBasicAuth
+import redis
+from redis import ConnectionError
+import logging
 
 
 # Flask
@@ -13,9 +16,23 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///book.sqlite'
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root@localhost/book'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
+r = redis.Redis(host='0.0.0.0')
 
 auth = HTTPBasicAuth()
 user = User()
+
+logging.basicConfig()
+logger = logging.getLogger('redis')
+
+
+@app.route("/redis")
+def redisCheck():
+    try:
+        r.ping()
+    except ConnectionError:
+        logger.error(
+            "Redis isn't running. try `/etc/init.d/redis-server restart`")
+        exit(0)
 
 
 @app.route("/")
@@ -23,7 +40,7 @@ def index():
     '''
     Home page
     '''
-    return redirect(url_for('contacts'))
+    return redirect('./contacts')
 
 
 @app.route('/api/users', methods=['POST'])
@@ -71,7 +88,6 @@ def verify_password(username_or_token, password):
         if not user or not user.verify_password(password):
             return False
     session["user_id"] = user.id
-    g.user = user
     return True
 
 
@@ -79,17 +95,7 @@ def verify_password(username_or_token, password):
 @auth.login_required
 def get_auth_token():
     token = g.user.generate_auth_token()
-    # return make_response(str(g.user.id), 200)
     return jsonify({'token': token.decode('ascii')})
-
-
-def load_user():
-    if session["user_id"]:
-        user = User.query.filter_by(username=session["user_id"]).first()
-    else:
-        # Make it better, use an anonymous User instead
-        user = {"name": "Guest"}
-    g.user = user
 
 
 @app.route("/api/add_contact", methods=('GET', 'POST'))
@@ -117,13 +123,10 @@ def new_contact():
                     try:
                         db.session.commit()
                         response_text = 'Contacts Added \n' + contact.name
+                        #r.set(contact.email, contact)
                         return make_response(response_text, 200)
-                        # User info
-                        flash('Contact created correctly', 'success')
-                        # return redirect(url_for('contacts'))
                     except:
                         db.session.rollback()
-                        flash('Error generating contact.', 'danger')
                 except Exception as e:
                     return make_response("OS1 error: {0}".format(e), 503)
             else:
@@ -199,19 +202,19 @@ def search():
     if request.data:
         data = request.data
         dataDict = json.loads(data)
-
     if 'name' in dataDict:
         name_search = dataDict['name']
-
     if 'email' in dataDict:
         email_search = dataDict['email']
-
     if name_search:
         all_contacts = Contact.query.filter(
             Contact.name.contains(name_search),
         ).filter(Contact.userid.contains(session["user_id"])).order_by(Contact.name).limit(10)
-
     if email_search:
+        #val = r.hget(email_search)
+        # if val is not None:
+        #    all_contacts = val
+        # else:
         all_contacts = Contact.query.filter(
             Contact.email.contains(email_search)
         ).filter(Contact.userid.contains(session["user_id"])).order_by(Contact.name).limit(10)
@@ -234,6 +237,7 @@ def contacts_delete(id):
         current_db_sessions = db.session.object_session(my_contact)
         current_db_sessions.delete(my_contact)
         current_db_sessions.commit()
+        r.flushdb()
     except:
         db.session.rollback()
     return make_response("Contact Deleted", 200)
